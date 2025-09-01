@@ -43,19 +43,21 @@ class EvalROUGEDataset(Dataset):
             tokenized = tokenizer.encode(text, add_special_tokens=False)
             if (len(tokenized)) < seq_len:
                 continue
-            first_n = len(tokenized) // 4 * 3
-            input = tokenizer.decode(tokenized[:first_n])
+            max_len = len(tokenized)
+            first_n = max_len // 4 * 3
+            input = tokenized[:first_n]
             reference = tokenizer.decode(tokenized[first_n:])
-            self.samples.append((input, reference))
+            self.samples.append((input, reference, max_len))
 
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, idx):
-        input, reference = self.samples[idx]
+        input, reference, max_len = self.samples[idx]
         return {
-            'input': input, 
-            'reference': reference
+            'input': torch.tensor(input), 
+            'reference': reference,
+            'max_len': max_len
         }
     
 def collate_fn(batch):
@@ -71,5 +73,18 @@ def collate_fn(batch):
         'source': padded_sources,
         'mask': mask_sources,
         'target': padded_targets
+    }
+    
+def collate_fn_rouge_ds(batch):
+    inputs = [item['input'] for item in batch]
+    references = [item['reference'] for item in batch]
+    max_lens = [item['max_len'] for item in batch]
+
+    padded_sources = pad_sequence(inputs, batch_first=True, padding_value=0)
+
+    return {
+        'input': padded_sources,
+        'reference': references,
+        'max_len': max_lens
     }
     

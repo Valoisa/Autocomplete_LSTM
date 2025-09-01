@@ -6,7 +6,7 @@ from torch.optim import Optimizer
 
 from torch.optim.lr_scheduler import LRScheduler
 
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, utils
 
 from . import lstm_model
 
@@ -32,9 +32,10 @@ def train_one_epoch(
 
         optimizer.zero_grad()
         loss.backward()
+        utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
-        if scheduler is not None:
-            scheduler.step()
+    if scheduler is not None:
+        scheduler.step()
     train_loss /= len(train_dataloader)
     print(f'Epoch: {epoch}, training loss: {train_loss:.4f}')
 

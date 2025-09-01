@@ -11,7 +11,6 @@ import evaluate
 
 import torch
 
-from . import next_token_dataset
 from . import lstm_model
 
 
@@ -19,21 +18,22 @@ from . import lstm_model
 def evaluate_gpt_vs_lstm(
         model_lstm: lstm_model.LSTMAutoComplete, 
         tokenizer: BertTokenizerFast, 
-        test_texts: List[str],
-        device: str
+        test_dataloader: DataLoader,
+        device: str,
+        batch_size: int=256
         ):
     
-    generator = pipeline('text-generation', model='distilgpt2', device=device)
+    generator = pipeline('text-generation', model='distilgpt2', batch_size=batch_size, device=device, truncation=True)
+    generator.tokenizer.pad_token_id = generator.tokenizer.eos_token_id
+    generator.tokenizer.padding_side = 'left'
     set_seed(42)
 
-    test_rouge_dataset = next_token_dataset.EvalROUGEDataset(test_texts, tokenizer)
     rouge = evaluate.load('rouge')
 
-    inputs = [item['input'] for item in test_rouge_dataset]
-    references = [item['reference'] for item in test_rouge_dataset]
+    references = []
     generated_gpt = []
     generated_lstm = []
-#   Выведем первые N дополнений текстов на экран
+#   Выведем N дополнений текстов на экран
     n_texts = 5
     i = 0
     samples = {
@@ -42,33 +42,45 @@ def evaluate_gpt_vs_lstm(
         'lstm' : []
         }
 
-    for input in tqdm(inputs, desc='Autocompleting inputs'):
-        input_ids = tokenizer.encode(input, add_special_tokens=False)
-        max_len = len(input_ids) * 2
+    for batch in tqdm(test_dataloader, desc='Autocompleting inputs'):
+        inputs = batch['input'].to(device)
+        max_len = max(batch['max_len'])
 
 #       Автодополнение с помощью GPT2
-        gpt_out = generator(
-            input, 
-            max_new_tokens=len(input_ids), 
+        gpt_inputs = [
+            tokenizer.decode(input, skip_special_tokens=True)
+            for input in inputs
+            ]
+        gpt_outputs = generator(
+            gpt_inputs, 
+            max_new_tokens=max_len // 3 + 1, 
             num_return_sequences=1,
             pad_token_id=0
-            )[0]['generated_text']
-        gpt_autocomplete = gpt_out[len(input):].lower()
-        generated_gpt.append(gpt_autocomplete)
+            ) #[0]['generated_text']
+        gpt_autocomplete = [
+            gpt_output[0]['generated_text'][len(gpt_input):].lower() 
+            for gpt_input, gpt_output in zip(gpt_inputs, gpt_outputs)
+            ]
+        generated_gpt.extend(gpt_autocomplete)
 
 #       Автодополнение с помощью LSTM-модели
-        lstm_out = model_lstm.generate(
-            torch.tensor(input_ids, dtype=torch.long),
+        lstm_outputs = model_lstm.generate(
+            inputs,
             eos_token=tokenizer.eos_token_id,
             max_len=max_len
         )
-        lstm_autocomplete = tokenizer.decode(lstm_out, skip_special_tokens=True)
-        generated_lstm.append(lstm_autocomplete)
+        lstm_autocomplete = [
+            tokenizer.decode(lstm_output, skip_special_tokens=True)
+            for lstm_output in lstm_outputs
+            ]
+        generated_lstm.extend(lstm_autocomplete)
+        
+        references.extend(batch['reference'])
 
         if i < n_texts:
-            samples['input'].append(input)
-            samples['gpt2'].append(gpt_autocomplete)
-            samples['lstm'].append(lstm_autocomplete)
+            samples['input'].append(gpt_inputs[0])
+            samples['gpt2'].append(gpt_autocomplete[0])
+            samples['lstm'].append(lstm_autocomplete[0])
             i += 1
 
     rouge_gpt_res = rouge.compute(predictions=generated_gpt, references=references)    
@@ -82,6 +94,11 @@ def evaluate_gpt_vs_lstm(
         print(f"{k}: {v:.4f}")
 
     print('=== Samples ===')
-    for i in range(n_texts):
-        print(f'Input: "{samples['input'][i]}"\n\tGPT2-autocomplete: "{samples['gpt2'][i]}"\n\tLSTM-autocomplete: "{samples['lstm'][i]}"')
+    for i in range(len(samples['input'])):
+        input_text = samples['input'][i]
+        print(f'Input: "{input_text}"')
+        gpt2_output = samples['gpt2'][i]
+        print(f'\tGPT2-autocomplete: "{gpt2_output}"')
+        lstm_output = samples['lstm'][i]
+        print(f'\tLSTM-autocomplete: "{lstm_output}"')
         print('===================================\n')

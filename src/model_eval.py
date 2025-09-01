@@ -11,17 +11,16 @@ from typing import Optional
 import evaluate
 
 from . import lstm_model
-from . import next_token_dataset
 
 
 rouge = evaluate.load('rouge')
 
-def evaluate(
+def evaluate_model(
         model: lstm_model.LSTMAutoComplete, 
         tokenizer: BertTokenizerFast,
         device: str, 
         val_dataloader: DataLoader, 
-        val_rouge_dataset: next_token_dataset.NextTokenDataset, 
+        val_rouge_dataloader: DataLoader, 
         criterion: CrossEntropyLoss, 
         test_phrase: Optional[str]):
     
@@ -40,15 +39,21 @@ def evaluate(
     val_loss /= len(val_dataloader)
 
 #   Подсчёт метрик ROUGE
-    inputs = [item['input'] for item in val_rouge_dataset]
-    references = [item['reference'] for item in val_rouge_dataset]
+    inputs = []
+    references = []
     generated = []
+    
     with torch.no_grad():
-        for input in inputs:
-            max_len = len(input) * 4 // 3
-            input_ids = torch.tensor(tokenizer.encode(input, add_special_tokens=False), dtype=torch.long)
-            model_out = model.generate(input_ids, tokenizer.eos_token_id, max_len=max_len)
-            generated.append(tokenizer.decode(model_out, skip_special_tokens=True))
+        for batch in tqdm(val_rouge_dataloader, desc='Evaluating ROUGE'):
+            max_len = batch['max_len']
+            input_ids = batch['input'].to(device)
+            model_outs = model.generate(input_ids, tokenizer.eos_token_id, max_len=max_len)
+            
+            generated.extend([
+                tokenizer.decode(model_out, skip_special_tokens=True) for model_out in model_outs
+                ])
+            references.extend(batch['reference'])
+            
     rouge_res = rouge.compute(predictions=generated, references=references)
     print(f'Validation loss: {val_loss}')
     print('Rouge metrics:')
@@ -58,9 +63,9 @@ def evaluate(
 #   Генерация тестовой фразы для демонстрации работы модели
     if test_phrase is not None:
         with torch.no_grad():
-            inputs = torch.tensor(tokenizer.encode(test_phrase, add_special_tokens=False), dtype=torch.long)
+            inputs = torch.tensor(tokenizer.encode(test_phrase, add_special_tokens=False), dtype=torch.long).to(device)
             print(test_phrase + ' ' + tokenizer.decode(
-                model.generate(inputs, tokenizer.eos_token_id, max_len=20), 
+                model.generate(inputs.unsqueeze(0), tokenizer.eos_token_id, max_len=20)[0], 
                 skip_special_tokens=True))
         
     return val_loss
