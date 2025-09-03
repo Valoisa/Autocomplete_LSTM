@@ -1,4 +1,4 @@
-from transformers import pipeline, set_seed
+from transformers import set_seed
 from transformers.pipelines.text_generation import TextGenerationPipeline
 
 from torch.utils.data import DataLoader
@@ -49,7 +49,7 @@ def evaluate_gpt_vs_lstm(
             ]
         gpt_outputs = generator(
             gpt_inputs, 
-            max_new_tokens=max_len // 3 + 1, 
+            max_new_tokens=max_len // 3 // 4 + 1, 
             num_return_sequences=1,
             pad_token_id=0
             )

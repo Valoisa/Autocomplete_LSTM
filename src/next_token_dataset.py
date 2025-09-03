@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 
 # Датасет для обучения next token prediction
 class NextTokenDataset(Dataset):
-    def __init__(self, texts, tokenizer, seq_len=7):
+    def __init__(self, texts, tokenizer, seq_len=50):
         super().__init__()
         self.samples = []
 
@@ -35,7 +35,7 @@ class NextTokenDataset(Dataset):
  # Датасет для вычисления метрик ROUGE
  # 'input' содержит первые 3/4 текста, 'reference' содержит продолжение
 class EvalROUGEDataset(Dataset):
-    def __init__(self, texts, tokenizer, seq_len=7):
+    def __init__(self, texts, tokenizer, seq_len=50):
         super().__init__()
         self.samples = []
 

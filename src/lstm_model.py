@@ -5,12 +5,12 @@ from torch.nn.functional import softmax
 
 
 class LSTMAutoComplete(nn.Module):
-    def __init__(self, vocab_size, hidden_size=128, num_layers=4):
+    def __init__(self, vocab_size, pad_token_id, hidden_size=128, num_layers=4):
         super().__init__()
 
-        self.embedding = nn.Embedding(vocab_size, hidden_size)
+        self.embedding = nn.Embedding(vocab_size, hidden_size, padding_idx=pad_token_id)
         self.lstm = nn.LSTM(hidden_size, hidden_size, batch_first=True, num_layers=num_layers)
-        self.dropout = nn.Dropout(p=0.1)
+        self.dropout = nn.Dropout(p=0.3)
         self.ffn = nn.Linear(hidden_size, vocab_size)
 
         self._init_weights()
