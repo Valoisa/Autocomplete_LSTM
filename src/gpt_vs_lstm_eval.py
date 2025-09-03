@@ -1,9 +1,7 @@
 from transformers import pipeline, set_seed
-from transformers import BertTokenizerFast
+from transformers.pipelines.text_generation import TextGenerationPipeline
 
 from torch.utils.data import DataLoader
-
-from typing import List
 
 from tqdm.auto import tqdm
 
@@ -12,20 +10,18 @@ import evaluate
 import torch
 
 from . import lstm_model
+from . import char_tokenizer
 
 
 # Считаем метрики ROUGE для GPT-2 и для LSTM и выводим оба результата
 def evaluate_gpt_vs_lstm(
-        model_lstm: lstm_model.LSTMAutoComplete, 
-        tokenizer: BertTokenizerFast, 
+        model_lstm: lstm_model.LSTMAutoComplete,
+        generator: TextGenerationPipeline, 
+        tokenizer: char_tokenizer.CharTokenizer, 
         test_dataloader: DataLoader,
         device: str,
-        batch_size: int=256
+        batch_size: int
         ):
-    
-    generator = pipeline('text-generation', model='distilgpt2', batch_size=batch_size, device=device, truncation=True)
-    generator.tokenizer.pad_token_id = generator.tokenizer.eos_token_id
-    generator.tokenizer.padding_side = 'left'
     set_seed(42)
 
     rouge = evaluate.load('rouge')
@@ -48,7 +44,7 @@ def evaluate_gpt_vs_lstm(
 
 #       Автодополнение с помощью GPT2
         gpt_inputs = [
-            tokenizer.decode(input, skip_special_tokens=True)
+            tokenizer.decode(input.tolist(), skip_special_tokens=True)
             for input in inputs
             ]
         gpt_outputs = generator(
@@ -56,7 +52,7 @@ def evaluate_gpt_vs_lstm(
             max_new_tokens=max_len // 3 + 1, 
             num_return_sequences=1,
             pad_token_id=0
-            ) #[0]['generated_text']
+            )
         gpt_autocomplete = [
             gpt_output[0]['generated_text'][len(gpt_input):].lower() 
             for gpt_input, gpt_output in zip(gpt_inputs, gpt_outputs)

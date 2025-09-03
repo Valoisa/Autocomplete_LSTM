@@ -1,12 +1,11 @@
 from tqdm.auto import tqdm
 
 from torch.utils.data import DataLoader
-
 from torch.optim import Optimizer
-
 from torch.optim.lr_scheduler import LRScheduler
-
 from torch.nn import CrossEntropyLoss, utils
+
+from typing import Optional
 
 from . import lstm_model
 
@@ -18,7 +17,7 @@ def train_one_epoch(
         train_dataloader: DataLoader, 
         optimizer: Optimizer, 
         criterion: CrossEntropyLoss, 
-        scheduler:LRScheduler=None):
+        scheduler: Optional[LRScheduler]=None):
     
     model.train()
     train_loss = 0.

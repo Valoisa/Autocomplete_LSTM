@@ -1,6 +1,5 @@
 from tqdm.auto import tqdm
 
-from transformers import BertTokenizerFast
 
 from torch.utils.data import DataLoader
 from torch.nn import CrossEntropyLoss
@@ -11,13 +10,14 @@ from typing import Optional
 import evaluate
 
 from . import lstm_model
+from . import char_tokenizer
 
 
 rouge = evaluate.load('rouge')
 
 def evaluate_model(
         model: lstm_model.LSTMAutoComplete, 
-        tokenizer: BertTokenizerFast,
+        tokenizer: char_tokenizer.CharTokenizer,
         device: str, 
         val_dataloader: DataLoader, 
         val_rouge_dataloader: DataLoader, 
@@ -65,7 +65,7 @@ def evaluate_model(
         with torch.no_grad():
             inputs = torch.tensor(tokenizer.encode(test_phrase, add_special_tokens=False), dtype=torch.long).to(device)
             print(test_phrase + ' ' + tokenizer.decode(
-                model.generate(inputs.unsqueeze(0), tokenizer.eos_token_id, max_len=20)[0], 
+                model.generate(inputs.unsqueeze(0), tokenizer.eos_token_id, max_len=len(test_phrase)*3)[0], 
                 skip_special_tokens=True))
         
     return val_loss
